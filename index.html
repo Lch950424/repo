@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>列車即時動態</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f0f2f5; padding-bottom: 50px; }
+        .timeline-box { border-left: 3px solid #dee2e6; margin-left: 10px; padding: 0 0 20px 20px; position: relative; }
+        .timeline-box::before { content: ''; width: 14px; height: 14px; background: #fff; border: 3px solid #dee2e6; border-radius: 50%; position: absolute; left: -8.5px; top: 0; }
+        .timeline-box.active { border-left-color: #0d6efd; }
+        .timeline-box.active::before { border-color: #0d6efd; background: #0d6efd; }
+        .timeline-box.passed { border-left-color: #198754; }
+        .timeline-box.passed::before { border-color: #198754; background: #198754; }
+        .badge-delay-ok { background-color: #198754; }
+        .badge-delay-bad { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+
+<div class="container mt-4" style="max-width: 600px;">
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h4 class="mb-3">🚄 列車追蹤助手</h4>
+            <div class="input-group mb-3">
+                <input type="text" id="inputTrain" class="form-control" placeholder="車次 (如 408)">
+                <button class="btn btn-primary" onclick="initApp()">查詢</button>
+            </div>
+            
+            <div id="mainArea" class="d-none">
+                <hr>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h2 id="trainTitle" class="m-0">--</h2>
+                    <span id="delayBadge" class="badge bg-secondary fs-6">讀取中</span>
+                </div>
+                <p class="text-muted small" id="locText">目前位置：讀取中...</p>
+
+                <div class="alert alert-warning">
+                    <label>🔔 到站提醒：</label>
+                    <select id="destSelect" class="form-select mt-1" onchange="updateShareUrl()">
+                        <option value="">選擇下車站點...</option>
+                    </select>
+                    <div id="etaText" class="mt-2 fw-bold text-dark"></div>
+                </div>
+
+                <button class="btn btn-success w-100 mb-4" onclick="shareLink()">
+                    📋 複製此班車狀態連結
+                </button>
+
+                <h6 class="text-muted">沿途停靠</h6>
+                <div id="timeline" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let trainDB = {};
+    let timer = null;
+    let currentTrainNo = "";
+    let notified = false;
+
+    // 初始化：讀取 json 並檢查網址參數
+    window.onload = async function() {
+        try {
+            const res = await fetch('train_db.json');
+            trainDB = await res.json();
+            
+            const params = new URLSearchParams(window.location.search);
+            if(params.has('train')){
+                document.getElementById('inputTrain').value = params.get('train');
+                initApp();
+                if(params.has('dest')){
+                    // 稍後等待 DOM 建立後再選取
+                    setTimeout(() => {
+                        document.getElementById('destSelect').value = params.get('dest');
+                        updateShareUrl(); // 觸發計算
+                    }, 500);
+                }
+            }
+        } catch(e) {
+            alert("載入時刻表失敗，請確認 train_db.json 是否存在");
+        }
+        
+        if("Notification" in window) Notification.requestPermission();
+    };
+
+    function initApp() {
+        const no = document.getElementById('inputTrain').value;
+        if(!trainDB[no]) return alert("找不到此車次，請確認今日是否行駛");
+
+        currentTrainNo = no;
+        document.getElementById('mainArea').classList.remove('d-none');
+        document.getElementById('trainTitle').innerText = `${no} 次 (${trainDB[no].type})`;
+        
+        // 建立下拉選單與時間軸
+        const stops = trainDB[no].stops;
+        const select = document.getElementById('destSelect');
+        select.innerHTML = '<option value="">選擇下車站點...</option>';
+        stops.forEach(s => {
+            select.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+        });
+
+        // 立即抓取即時資料，並每 30 秒更新
+        fetchLiveStatus();
+        if(timer) clearInterval(timer);
+        timer = setInterval(fetchLiveStatus, 30000);
+    }
+
+    async function fetchLiveStatus() {
+        try {
+            // 呼叫後端 API
+            const res = await fetch(`/api/index?no=${currentTrainNo}`);
+            const data = await res.json();
+            
+            updateUI(data.delay || 0, data.loc || "未知");
+        } catch(e) {
+            console.error("API Error", e);
+        }
+    }
+
+    function updateUI(delay, currentLocName) {
+        // 更新誤點標籤
+        const badge = document.getElementById('delayBadge');
+        badge.innerText = delay > 0 ? `晚 ${delay} 分` : `準點`;
+        badge.className = `badge fs-6 ${delay > 0 ? 'badge-delay-bad' : 'badge-delay-ok'}`;
+        
+        document.getElementById('locText').innerText = `目前位置約在：${currentLocName}`;
+
+        // 重繪時間軸與計算 ETA
+        const stops = trainDB[currentTrainNo].stops;
+        let html = "";
+        let passed = true; // 簡單判斷：如果目前位置跟這站一樣，之後的才是未到
+
+        // 這裡做簡化判斷：若 API 回傳的站名等於某站，該站與之後的視為未過
+        // 更精準需比對 StationID，但 API 有時只回傳站名
+        let foundCurrent = false;
+
+        stops.forEach(s => {
+            if(s.name === currentLocName) foundCurrent = true;
+            
+            // 預計時間計算
+            const [h, m] = s.time.split(':').map(Number);
+            const date = new Date();
+            date.setHours(h, m + delay, 0);
+            const etaStr = date.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+
+            // 狀態樣式
+            let statusClass = "";
+            if(foundCurrent) { passed = false; statusClass = "active"; foundCurrent = false; } // 正在這
+            else if(passed) { statusClass = "passed"; }
+
+            html += `
+                <div class="timeline-box ${statusClass}">
+                    <strong>${s.name}</strong> 
+                    <span class="text-muted small">表定 ${s.time}</span>
+                    <div class="${delay>0?'text-danger':'text-success'} fw-bold">預計 ${etaStr}</div>
+                </div>
+            `;
+            
+            // 檢查通知
+            checkAlert(s.id, date);
+        });
+        document.getElementById('timeline').innerHTML = html;
+    }
+
+    function checkAlert(stopId, etaDate) {
+        const targetId = document.getElementById('destSelect').value;
+        if(stopId !== targetId) return;
+
+        const now = new Date();
+        const diffMins = (etaDate - now) / 1000 / 60;
+        
+        const etaStr = etaDate.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+        document.getElementById('etaText').innerText = `預計 ${etaStr} 抵達，剩約 ${Math.round(diffMins)} 分`;
+
+        if(diffMins <= 5 && diffMins > 0 && !notified) {
+            new Notification("下車提醒", { body: "列車即將抵達目的地，請準備下車！" });
+            alert("🔔 列車即將進站！");
+            notified = true;
+        }
+    }
+
+    function updateShareUrl() {
+        // 這裡只是為了觸發更新文字，實際參數在 shareLink 抓
+        fetchLiveStatus(); 
+    }
+
+    function shareLink() {
+        const dest = document.getElementById('destSelect').value;
+        const url = `${window.location.origin}${window.location.pathname}?train=${currentTrainNo}&dest=${dest}`;
+        navigator.clipboard.writeText(url).then(() => alert("連結已複製！"));
+    }
+</script>
+</body>
+</html>
