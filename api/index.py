@@ -61,4 +61,5 @@ class handler(BaseHTTPRequestHandler):
         # 允許跨域 (雖然同源不需要，但以防萬一)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
+
         self.wfile.write(json.dumps(data).encode('utf-8'))
