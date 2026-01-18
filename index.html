@@ -16,7 +16,6 @@
             --passed: #adb5bd;
         }
 
-        /* 深色模式支援 */
         @media (prefers-color-scheme: dark) {
             :root {
                 --bg-color: #121212;
@@ -33,7 +32,7 @@
             background-color: var(--bg-color); 
             color: var(--text-main);
             padding-bottom: 80px;
-            transition: background-color 0.3s;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
 
         .card {
@@ -41,102 +40,75 @@
             border: none;
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
             margin-bottom: 15px;
+            border-radius: 16px;
         }
 
         .form-control, .form-select, .btn {
             border-radius: 12px;
             height: 45px;
+            font-size: 16px; /* 防止 iOS 自動縮放 */
         }
 
-        /* 置頂狀態列 */
+        /* Sticky Header */
         .sticky-header {
             position: sticky;
             top: 0;
             z-index: 100;
-            background-color: rgba(var(--bs-body-bg-rgb), 0.95); /* 毛玻璃效果基底 */
-            backdrop-filter: blur(10px);
-            padding: 10px 0;
-            margin: 0 -12px;
-            padding-left: 12px; 
-            padding-right: 12px;
-            border-bottom: 1px solid var(--timeline-line);
-            display: none; /* 預設隱藏，載入車次後顯示 */
+            background-color: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 12px 15px;
+            margin: 0 -12px 15px -12px;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            border-radius: 0 0 16px 16px;
+            display: none;
         }
-        /* 在深色模式下的 Sticky Header 背景修正 */
         @media (prefers-color-scheme: dark) {
             .sticky-header {
-                background-color: rgba(30, 30, 30, 0.95);
+                background-color: rgba(30, 30, 30, 0.85);
+                border-bottom: 1px solid rgba(255,255,255,0.05);
             }
         }
 
-        /* 時間軸優化 */
-        .timeline-container {
-            position: relative;
-            padding-left: 20px;
-        }
-        .timeline-item {
-            position: relative;
-            padding-left: 25px;
-            padding-bottom: 30px;
-            border-left: 2px solid var(--timeline-line);
-        }
+        /* Timeline Styles */
+        .timeline-container { position: relative; padding-left: 20px; }
+        .timeline-item { position: relative; padding-left: 25px; padding-bottom: 35px; border-left: 2px solid var(--timeline-line); }
         .timeline-item:last-child { border-left: transparent; }
-
+        
         .timeline-dot {
-            position: absolute;
-            left: -6px;
-            top: 5px;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--card-bg);
-            border: 2px solid var(--timeline-line);
+            position: absolute; left: -6px; top: 5px;
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--card-bg); border: 2px solid var(--timeline-line);
             transition: all 0.3s;
         }
 
-        /* 狀態：已過站 (變灰) */
         .timeline-item.passed { border-left-color: var(--timeline-line); }
         .timeline-item.passed .timeline-dot { background: var(--passed); border-color: var(--passed); }
         .timeline-item.passed .text-main { color: var(--passed); text-decoration: line-through; }
         
-        /* 狀態：目前位置 (放大亮燈) */
         .timeline-item.active .timeline-dot { 
             width: 16px; height: 16px; left: -9px; top: 2px;
             background: var(--highlight); border-color: var(--highlight);
             box-shadow: 0 0 10px rgba(13, 110, 253, 0.4);
         }
-        .timeline-item.active .text-main { font-weight: bold; color: var(--highlight); font-size: 1.1rem; }
+        .timeline-item.active .text-main { font-weight: bold; color: var(--highlight); font-size: 1.15rem; }
 
         .delay-tag { 
-            font-size: 0.75rem; 
-            padding: 3px 8px; 
-            border-radius: 20px; 
-            font-weight: bold;
-            display: inline-block;
-            margin-top: 4px;
+            font-size: 0.75rem; padding: 4px 8px; border-radius: 20px; font-weight: bold;
+            display: inline-block; margin-left: 8px;
         }
         .bg-delay-ok { background-color: #d1e7dd; color: #0f5132; }
         .bg-delay-bad { background-color: #f8d7da; color: #842029; }
         .bg-not-started { background-color: #e2e3e5; color: #41464b; }
 
-        /* 輸入框區塊 */
-        .input-area {
-            display: flex; gap: 10px;
-        }
-
-        /* 底部資訊 */
         .footer-info {
-            position: fixed;
-            bottom: 0; left: 0; right: 0;
-            background: var(--card-bg);
-            padding: 8px;
-            font-size: 0.8rem;
-            text-align: center;
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: var(--card-bg); padding: 10px;
+            font-size: 0.75rem; text-align: center;
             border-top: 1px solid var(--timeline-line);
-            color: var(--text-sub);
+            color: var(--text-sub); z-index: 200;
         }
         
-        h2, h4, h6 { color: var(--text-main); }
         .text-main { color: var(--text-main); }
         .text-sub { color: var(--text-sub); }
     </style>
@@ -146,27 +118,283 @@
 <div class="container mt-3" style="max-width: 600px;">
     
     <div class="card p-3">
-        <h4 class="mb-3">🚄 列車動態 Pro</h4>
-        <div class="input-area">
-            <input type="tel" id="inputTrain" class="form-control" placeholder="車次 (例 408)" inputmode="numeric">
-            <button class="btn btn-primary" style="min-width: 80px;" onclick="initApp()">查詢</button>
+        <h4 class="mb-3 fw-bold">🚄 列車動態 Pro</h4>
+        <div class="d-flex gap-2">
+            <input type="tel" id="inputTrain" class="form-control" placeholder="輸入車次 (例 408)" inputmode="numeric">
+            <button id="searchBtn" class="btn btn-primary" style="min-width: 80px;">查詢</button>
         </div>
     </div>
 
     <div id="mainArea" class="d-none">
         
-        <div class="card sticky-header" id="stickyHeader">
+        <div class="sticky-header shadow-sm" id="stickyHeader">
             <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h5 class="m-0 fw-bold" id="trainTitle">--</h5>
-                    <small id="currentLocText" class="text-sub">讀取中...</small>
+                <div style="overflow: hidden;">
+                    <h5 class="m-0 fw-bold text-truncate" id="trainTitle">--</h5>
+                    <small id="currentLocText" class="text-sub d-block text-truncate">讀取中...</small>
                 </div>
-                <span id="headerBadge" class="badge rounded-pill bg-secondary">--</span>
+                <span id="headerBadge" class="badge rounded-pill bg-secondary ms-2" style="white-space: nowrap;">--</span>
             </div>
         </div>
 
         <div class="card p-3">
-            <label class="text-sub small mb-1">🔔 到站提醒 (前 5 分鐘)</label>
+            <label class="text-sub small mb-1 fw-bold">🔔 到站提醒 (前 5 分鐘)</label>
             <div class="d-flex gap-2">
-                <select id="destSelect" class="form-select" onchange="updateShareUrl()"></select>
-                <button class="btn btn-outline-success"
+                <select id="destSelect" class="form-select"></select>
+                <button class="btn btn-outline-success" onclick="shareLink()">📋 分享</button>
+            </div>
+            <div id="etaText" class="mt-2 fw-bold text-main" style="min-height: 24px;"></div>
+        </div>
+
+        <div class="card p-3">
+            <h6 class="text-sub border-bottom pb-2 mb-3">行駛動態</h6>
+            <div id="timeline" class="timeline-container"></div>
+        </div>
+    </div>
+</div>
+
+<div class="footer-info">
+    最後更新：<span id="lastUpdate">--:--:--</span>
+</div>
+
+<script>
+    console.log("程式開始載入...");
+
+    // 全域變數宣告
+    let trainDB = {};
+    let timer = null;
+    let currentTrainNo = "";
+    let notified = false;
+    let firstLoad = true;
+
+    // 1. 初始化監聽器 (確保按鈕一定找得到函式)
+    document.addEventListener('DOMContentLoaded', function() {
+        // 綁定查詢按鈕事件
+        document.getElementById('searchBtn').addEventListener('click', initApp);
+        
+        // 綁定下拉選單變更事件
+        document.getElementById('destSelect').addEventListener('change', updateShareUrl);
+
+        // 載入資料庫
+        loadDatabase();
+    });
+
+    // 2. 載入資料庫
+    async function loadDatabase() {
+        try {
+            const res = await fetch('train_db.json');
+            if (!res.ok) throw new Error("找不到 train_db.json");
+            
+            trainDB = await res.json();
+            console.log("資料庫載入成功");
+
+            // 檢查網址參數 (分享連結用)
+            const params = new URLSearchParams(window.location.search);
+            if(params.has('train')){
+                document.getElementById('inputTrain').value = params.get('train');
+                initApp();
+                if(params.has('dest')){
+                    setTimeout(() => {
+                        const select = document.getElementById('destSelect');
+                        select.value = params.get('dest');
+                        updateShareUrl(); 
+                    }, 800); // 稍微延遲確保 DOM 建立
+                }
+            }
+        } catch(e) {
+            console.error("載入失敗:", e);
+            alert("⚠️ 錯誤：無法載入時刻表 (train_db.json)。請確認檔案是否已上傳到 GitHub。");
+        }
+        
+        if("Notification" in window) Notification.requestPermission();
+    }
+
+    // 3. 主程式：初始化介面
+    function initApp() {
+        const no = document.getElementById('inputTrain').value.trim();
+        if(!no) return alert("請輸入車次！");
+        if(!trainDB[no]) return alert("❌ 查無此車次，請確認今日是否行駛或更新時刻表。");
+
+        currentTrainNo = no;
+        firstLoad = true;
+        
+        // 顯示介面
+        document.getElementById('mainArea').classList.remove('d-none');
+        document.getElementById('stickyHeader').style.display = 'block';
+        document.getElementById('trainTitle').innerText = `${no} 次 ${trainDB[no].type}`;
+        
+        // 填入下拉選單
+        const stops = trainDB[no].stops;
+        const select = document.getElementById('destSelect');
+        const currentVal = select.value;
+        select.innerHTML = '<option value="">選擇下車站...</option>';
+        stops.forEach(s => {
+            select.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+        });
+        // 嘗試保留原本選擇
+        if(currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+            select.value = currentVal;
+        }
+
+        // 立即執行並設定輪詢
+        fetchLiveStatus();
+        if(timer) clearInterval(timer);
+        timer = setInterval(fetchLiveStatus, 30000); // 30秒更新一次
+    }
+
+    // 4. API 查詢
+    async function fetchLiveStatus() {
+        const now = new Date();
+        document.getElementById('lastUpdate').innerText = now.toLocaleTimeString();
+
+        try {
+            const res = await fetch(`/api/index?no=${currentTrainNo}`);
+            if (!res.ok) throw new Error("API 回應錯誤");
+            
+            const data = await res.json();
+            updateUI(data);
+        } catch(e) {
+            console.error("API Error", e);
+            document.getElementById('currentLocText').innerText = "連線異常，重試中...";
+        }
+    }
+
+    // 5. 更新畫面 (UI)
+    function updateUI(data) {
+        const delay = data.delay || 0;
+        const status = data.status || "not_started";
+        const loc = data.loc || "未知";
+
+        // 更新 Header 狀態
+        const badge = document.getElementById('headerBadge');
+        const locText = document.getElementById('currentLocText');
+        
+        if (status === "not_started") {
+            badge.innerText = "尚未發車";
+            badge.className = "badge rounded-pill bg-secondary ms-2";
+            locText.innerText = "等待發車中";
+        } else {
+            badge.innerText = delay > 0 ? `晚 ${delay} 分` : `準點`;
+            badge.className = `badge rounded-pill ms-2 ${delay > 0 ? 'bg-danger' : 'bg-success'}`;
+            locText.innerText = `目前位置：${loc}`;
+        }
+
+        // 繪製時間軸
+        const stops = trainDB[currentTrainNo].stops;
+        let html = "";
+        let passed = true; 
+        let foundCurrent = false;
+        let activeElementId = "";
+
+        stops.forEach((s, index) => {
+            if(s.name === loc) foundCurrent = true;
+            
+            // 計算 ETA
+            const [h, m] = s.time.split(':').map(Number);
+            const date = new Date();
+            date.setHours(h, m + delay, 0);
+            const etaStr = date.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+
+            // 狀態 CSS
+            let statusClass = "";
+            let rowId = `stop-${index}`;
+
+            if(foundCurrent) { 
+                passed = false; 
+                statusClass = "active"; 
+                foundCurrent = false; 
+                activeElementId = rowId;
+            } else if(passed && status !== "not_started") { 
+                statusClass = "passed"; 
+            }
+
+            // 誤點標籤
+            let delayHtml = "";
+            if (status === "not_started") {
+                delayHtml = `<span class="delay-tag bg-not-started">表定 ${s.time}</span>`;
+            } else if (delay > 0) {
+                delayHtml = `<span class="delay-tag bg-delay-bad">晚 ${delay} 分</span>`;
+            } else {
+                delayHtml = `<span class="delay-tag bg-delay-ok">準點</span>`;
+            }
+
+            html += `
+                <div class="timeline-item ${statusClass}" id="${rowId}">
+                    <div class="timeline-dot"></div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-main fs-5">${s.name}</span>
+                        ${delayHtml}
+                    </div>
+                    <div class="text-sub small mt-1">
+                        預計 <span class="${statusClass === 'active' ? 'fw-bold text-primary' : ''}">${status === "not_started" ? s.time : etaStr}</span>
+                    </div>
+                </div>
+            `;
+            
+            checkAlert(s.id, date, status);
+        });
+
+        document.getElementById('timeline').innerHTML = html;
+
+        // 自動捲動 (只在初次載入且已發車時執行)
+        if (firstLoad && activeElementId && status !== "not_started") {
+            setTimeout(() => {
+                const el = document.getElementById(activeElementId);
+                if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
+            firstLoad = false;
+        }
+    }
+
+    // 6. 檢查通知
+    function checkAlert(stopId, etaDate, status) {
+        if (status === "not_started") return;
+
+        const targetId = document.getElementById('destSelect').value;
+        if(stopId !== targetId) return;
+
+        const now = new Date();
+        const diffMins = (etaDate - now) / 1000 / 60;
+        
+        const etaStr = etaDate.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+        const etaTextDiv = document.getElementById('etaText');
+        
+        if (diffMins > 60) {
+            etaTextDiv.innerHTML = `預計 ${etaStr} 抵達`;
+        } else if (diffMins > 0) {
+            etaTextDiv.innerHTML = `預計 ${etaStr} 抵達，剩 <span class="text-danger" style="font-size:1.4em">${Math.round(diffMins)}</span> 分`;
+        } else {
+            etaTextDiv.innerHTML = `列車已抵達或駛離`;
+        }
+
+        if(diffMins <= 5 && diffMins > 0 && !notified) {
+            new Notification("下車提醒", { body: `列車即將抵達，請準備下車！` });
+            if(navigator.vibrate) navigator.vibrate([500, 200, 500]);
+            alert("🔔 準備下車！");
+            notified = true;
+        }
+    }
+
+    // 7. 分享功能
+    function updateShareUrl() {
+        notified = false; 
+        fetchLiveStatus(); 
+    }
+
+    function shareLink() {
+        const dest = document.getElementById('destSelect').value;
+        const url = `${window.location.origin}${window.location.pathname}?train=${currentTrainNo}&dest=${dest}`;
+        
+        if (navigator.share) {
+            navigator.share({
+                title: '列車動態',
+                text: `我搭乘的 ${currentTrainNo} 次列車`,
+                url: url,
+            }).catch(console.error);
+        } else {
+            navigator.clipboard.writeText(url).then(() => alert("連結已複製！"));
+        }
+    }
+</script>
+</body>
+</html>
