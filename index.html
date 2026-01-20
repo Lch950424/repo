@@ -14,6 +14,7 @@
             --timeline-line: #dee2e6;
             --highlight: #0d6efd;
             --passed: #adb5bd;
+            --line-color: #06c755; /* LINE 官方綠色 */
         }
 
         @media (prefers-color-scheme: dark) {
@@ -46,7 +47,19 @@
         .form-control, .form-select, .btn {
             border-radius: 12px;
             height: 45px;
-            font-size: 16px; /* 防止 iOS 自動縮放 */
+            font-size: 16px;
+        }
+
+        /* LINE 按鈕專用樣式 */
+        .btn-line {
+            background-color: var(--line-color);
+            color: white;
+            border: none;
+            font-weight: bold;
+        }
+        .btn-line:hover {
+            background-color: #05b34c;
+            color: white;
         }
 
         /* Sticky Header */
@@ -138,11 +151,16 @@
         </div>
 
         <div class="card p-3">
-            <label class="text-sub small mb-1 fw-bold">🔔 到站提醒 (前 5 分鐘)</label>
-            <div class="d-flex gap-2">
-                <select id="destSelect" class="form-select"></select>
-                <button class="btn btn-outline-success" onclick="shareLink()">📋 分享</button>
-            </div>
+            <label class="text-sub small mb-1 fw-bold">🔔 到站提醒與即時分享</label>
+            <select id="destSelect" class="form-select mb-2"></select>
+            
+            <button id="lineShareBtn" class="btn btn-line w-100 d-flex align-items-center justify-content-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 0c4.411 0 8 2.912 8 6.492 0 1.433-.555 2.723-1.715 3.994-1.675 1.844-5.096 4.054-6.285 4.515-1.189.461-1.237-.311-1.237-.311l.129-2.028c-2.748-.076-5.892-1.786-5.892-6.17C0 2.912 3.59 0 8 0"/>
+                </svg>
+                傳送行程給朋友 (LINE)
+            </button>
+            
             <div id="etaText" class="mt-2 fw-bold text-main" style="min-height: 24px;"></div>
         </div>
 
@@ -160,35 +178,27 @@
 <script>
     console.log("程式開始載入...");
 
-    // 全域變數宣告
     let trainDB = {};
     let timer = null;
     let currentTrainNo = "";
     let notified = false;
     let firstLoad = true;
+    let currentDelay = 0; // 新增全域變數存誤點
 
-    // 1. 初始化監聽器 (確保按鈕一定找得到函式)
     document.addEventListener('DOMContentLoaded', function() {
-        // 綁定查詢按鈕事件
         document.getElementById('searchBtn').addEventListener('click', initApp);
-        
-        // 綁定下拉選單變更事件
-        document.getElementById('destSelect').addEventListener('change', updateShareUrl);
-
-        // 載入資料庫
+        document.getElementById('destSelect').addEventListener('change', updateInfo);
+        document.getElementById('lineShareBtn').addEventListener('click', shareToLine); // 綁定 LINE 按鈕
         loadDatabase();
     });
 
-    // 2. 載入資料庫
     async function loadDatabase() {
         try {
             const res = await fetch('train_db.json');
             if (!res.ok) throw new Error("找不到 train_db.json");
-            
             trainDB = await res.json();
             console.log("資料庫載入成功");
 
-            // 檢查網址參數 (分享連結用)
             const params = new URLSearchParams(window.location.search);
             if(params.has('train')){
                 document.getElementById('inputTrain').value = params.get('train');
@@ -197,8 +207,8 @@
                     setTimeout(() => {
                         const select = document.getElementById('destSelect');
                         select.value = params.get('dest');
-                        updateShareUrl(); 
-                    }, 800); // 稍微延遲確保 DOM 建立
+                        updateInfo(); 
+                    }, 800);
                 }
             }
         } catch(e) {
@@ -209,7 +219,6 @@
         if("Notification" in window) Notification.requestPermission();
     }
 
-    // 3. 主程式：初始化介面
     function initApp() {
         const no = document.getElementById('inputTrain').value.trim();
         if(!no) return alert("請輸入車次！");
@@ -218,31 +227,26 @@
         currentTrainNo = no;
         firstLoad = true;
         
-        // 顯示介面
         document.getElementById('mainArea').classList.remove('d-none');
         document.getElementById('stickyHeader').style.display = 'block';
         document.getElementById('trainTitle').innerText = `${no} 次 ${trainDB[no].type}`;
         
-        // 填入下拉選單
         const stops = trainDB[no].stops;
         const select = document.getElementById('destSelect');
         const currentVal = select.value;
-        select.innerHTML = '<option value="">選擇下車站...</option>';
+        select.innerHTML = '<option value="">選擇下車或分享的終點站...</option>';
         stops.forEach(s => {
             select.innerHTML += `<option value="${s.id}">${s.name}</option>`;
         });
-        // 嘗試保留原本選擇
         if(currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
             select.value = currentVal;
         }
 
-        // 立即執行並設定輪詢
         fetchLiveStatus();
         if(timer) clearInterval(timer);
-        timer = setInterval(fetchLiveStatus, 30000); // 30秒更新一次
+        timer = setInterval(fetchLiveStatus, 30000);
     }
 
-    // 4. API 查詢
     async function fetchLiveStatus() {
         const now = new Date();
         document.getElementById('lastUpdate').innerText = now.toLocaleTimeString();
@@ -250,8 +254,11 @@
         try {
             const res = await fetch(`/api/index?no=${currentTrainNo}`);
             if (!res.ok) throw new Error("API 回應錯誤");
-            
             const data = await res.json();
+            
+            // 更新全域誤點變數
+            currentDelay = data.delay || 0;
+            
             updateUI(data);
         } catch(e) {
             console.error("API Error", e);
@@ -259,13 +266,11 @@
         }
     }
 
-    // 5. 更新畫面 (UI)
     function updateUI(data) {
         const delay = data.delay || 0;
         const status = data.status || "not_started";
         const loc = data.loc || "未知";
 
-        // 更新 Header 狀態
         const badge = document.getElementById('headerBadge');
         const locText = document.getElementById('currentLocText');
         
@@ -279,7 +284,6 @@
             locText.innerText = `目前位置：${loc}`;
         }
 
-        // 繪製時間軸
         const stops = trainDB[currentTrainNo].stops;
         let html = "";
         let passed = true; 
@@ -289,13 +293,11 @@
         stops.forEach((s, index) => {
             if(s.name === loc) foundCurrent = true;
             
-            // 計算 ETA
             const [h, m] = s.time.split(':').map(Number);
             const date = new Date();
             date.setHours(h, m + delay, 0);
             const etaStr = date.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
 
-            // 狀態 CSS
             let statusClass = "";
             let rowId = `stop-${index}`;
 
@@ -308,7 +310,6 @@
                 statusClass = "passed"; 
             }
 
-            // 誤點標籤
             let delayHtml = "";
             if (status === "not_started") {
                 delayHtml = `<span class="delay-tag bg-not-started">表定 ${s.time}</span>`;
@@ -336,7 +337,6 @@
 
         document.getElementById('timeline').innerHTML = html;
 
-        // 自動捲動 (只在初次載入且已發車時執行)
         if (firstLoad && activeElementId && status !== "not_started") {
             setTimeout(() => {
                 const el = document.getElementById(activeElementId);
@@ -346,7 +346,6 @@
         }
     }
 
-    // 6. 檢查通知
     function checkAlert(stopId, etaDate, status) {
         if (status === "not_started") return;
 
@@ -375,25 +374,46 @@
         }
     }
 
-    // 7. 分享功能
-    function updateShareUrl() {
+    function updateInfo() {
         notified = false; 
         fetchLiveStatus(); 
     }
 
-    function shareLink() {
-        const dest = document.getElementById('destSelect').value;
-        const url = `${window.location.origin}${window.location.pathname}?train=${currentTrainNo}&dest=${dest}`;
+    // ★★★ LINE 分享邏輯 ★★★
+    function shareToLine() {
+        const select = document.getElementById('destSelect');
+        const destIndex = select.selectedIndex;
         
-        if (navigator.share) {
-            navigator.share({
-                title: '列車動態',
-                text: `我搭乘的 ${currentTrainNo} 次列車`,
-                url: url,
-            }).catch(console.error);
-        } else {
-            navigator.clipboard.writeText(url).then(() => alert("連結已複製！"));
+        if (destIndex <= 0) {
+            alert("請先在下拉選單選擇「目的車站」，才能計算預計抵達時間喔！");
+            return;
         }
+
+        const destName = select.options[destIndex].text;
+        const destId = select.value;
+        const trainType = trainDB[currentTrainNo].type;
+        
+        // 取得誤點狀態文字
+        const delayText = currentDelay > 0 ? `晚 ${currentDelay} 分` : "準點";
+
+        // 計算該站 ETA
+        const stopData = trainDB[currentTrainNo].stops.find(s => s.id === destId);
+        const [h, m] = stopData.time.split(':').map(Number);
+        const date = new Date();
+        date.setHours(h, m + currentDelay); // 加上誤點
+        const eta = date.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+
+        // 組合目前的網址 (包含參數，讓朋友一點開就是這一站)
+        const baseUrl = window.location.origin + window.location.pathname;
+        const shareUrl = `${baseUrl}?train=${currentTrainNo}&dest=${destId}`;
+
+        // 組合分享文字
+        const msg = `搭乘 ${currentTrainNo} 列車 (${trainType})\n` +
+                    `目前 ${delayText}，預計 ${eta} 抵達 ${destName}\n\n` +
+                    `查看即時動態請點選下方網址：\n${shareUrl}`;
+
+        // 開啟 LINE
+        window.open(`https://line.me/R/msg/text/?${encodeURIComponent(msg)}`, '_blank');
     }
 </script>
 </body>
