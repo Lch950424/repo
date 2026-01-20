@@ -17,6 +17,11 @@
             --highlight: #0d6efd;
             --passed: #adb5bd;
             --line-color: #06c755;
+            
+            /* LED 跑馬燈配色 */
+            --led-bg: #212529;
+            --led-text: #ffc107; /* 琥珀色，像真實火車顯示屏 */
+            --led-alert: #ff4d4d; /* 誤點時的紅色 */
         }
 
         @media (prefers-color-scheme: dark) {
@@ -60,21 +65,58 @@
         /* Sticky Header */
         .sticky-header {
             position: sticky; top: 0; z-index: 100;
-            background-color: rgba(255, 255, 255, 0.85);
+            background-color: rgba(255, 255, 255, 0.9); /*稍微不透明一點，讓跑馬燈清楚*/
             backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            padding: 12px 15px; margin: 0 -12px 15px -12px;
+            padding: 10px 15px; margin: 0 -12px 15px -12px;
             border-bottom: 1px solid rgba(0,0,0,0.05);
             border-radius: 0 0 16px 16px;
             display: none;
         }
         @media (prefers-color-scheme: dark) {
             .sticky-header {
-                background-color: rgba(30, 30, 30, 0.85);
+                background-color: rgba(30, 30, 30, 0.9);
                 border-bottom: 1px solid rgba(255,255,255,0.05);
             }
         }
 
-        /* 底部資訊列 (新版樣式) */
+        /* ★★★ LED 跑馬燈樣式 ★★★ */
+        .marquee-box {
+            background-color: var(--led-bg);
+            color: var(--led-text);
+            overflow: hidden;
+            white-space: nowrap;
+            padding: 8px 0;
+            border-radius: 8px;
+            margin-top: 8px;
+            font-family: 'Courier New', Courier, monospace; /* 等寬字體更有數位感 */
+            font-weight: bold;
+            font-size: 1rem;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5); /* 內陰影，模擬螢幕 */
+            position: relative;
+        }
+
+        .marquee-content {
+            display: inline-block;
+            padding-left: 100%; /* 從最右邊開始 */
+            animation: scroll-left 15s linear infinite; /* 15秒跑完一輪 */
+        }
+        
+        /* 誤點嚴重時字變紅 */
+        .marquee-alert { color: var(--led-alert); }
+
+        /* 手指按住暫停捲動 */
+        .marquee-box:hover .marquee-content, 
+        .marquee-box:active .marquee-content {
+            animation-play-state: paused;
+        }
+
+        @keyframes scroll-left {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+
+        /* Footer Info */
         .footer-info {
             position: fixed; bottom: 0; left: 0; right: 0;
             background: var(--card-bg); padding: 8px 10px;
@@ -107,7 +149,6 @@
         .timeline-container { position: relative; padding-left: 20px; }
         .timeline-item { position: relative; padding-left: 25px; padding-bottom: 35px; border-left: 2px solid var(--timeline-line); }
         .timeline-item:last-child { border-left: transparent; }
-        
         .timeline-dot {
             position: absolute; left: -6px; top: 5px;
             width: 10px; height: 10px; border-radius: 50%;
@@ -117,7 +158,6 @@
         .timeline-item.passed { border-left-color: var(--timeline-line); }
         .timeline-item.passed .timeline-dot { background: var(--passed); border-color: var(--passed); }
         .timeline-item.passed .text-main { color: var(--passed); text-decoration: line-through; }
-        
         .timeline-item.active .timeline-dot { 
             width: 16px; height: 16px; left: -9px; top: 2px;
             background: var(--highlight); border-color: var(--highlight);
@@ -151,11 +191,12 @@
     <div id="mainArea" class="d-none">
         <div class="sticky-header shadow-sm" id="stickyHeader">
             <div class="d-flex justify-content-between align-items-center">
-                <div style="overflow: hidden;">
-                    <h5 class="m-0 fw-bold text-truncate" id="trainTitle">--</h5>
-                    <small id="currentLocText" class="text-sub d-block text-truncate">讀取中...</small>
-                </div>
-                <span id="headerBadge" class="badge rounded-pill bg-secondary ms-2" style="white-space: nowrap;">--</span>
+                <h5 class="m-0 fw-bold" id="trainTitle">--</h5>
+                <span id="headerBadge" class="badge rounded-pill bg-secondary ms-2">--</span>
+            </div>
+            
+            <div class="marquee-box">
+                <div class="marquee-content" id="marqueeText">資料讀取中...</div>
             </div>
         </div>
 
@@ -209,7 +250,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    console.log("程式開始載入 (Ver: Footer-Update)...");
+    console.log("程式開始載入 (Ver: Marquee)...");
 
     let trainDB = {};
     let timer = null;
@@ -262,8 +303,6 @@
         document.getElementById('stickyHeader').style.display = 'block';
         document.getElementById('fabContainer').style.display = 'block';
         document.getElementById('trainTitle').innerText = `${no} 次 ${trainDB[no].type}`;
-        
-        // 更新底部車次
         document.getElementById('footerTrain').innerText = `${no}次`;
 
         const stops = trainDB[no].stops;
@@ -277,7 +316,7 @@
 
         fetchLiveStatus();
         if(timer) clearInterval(timer);
-        timer = setInterval(fetchLiveStatus, 60000); // 改為 60 秒更新一次
+        timer = setInterval(fetchLiveStatus, 60000); 
     }
 
     async function fetchLiveStatus() {
@@ -292,8 +331,8 @@
             updateUI(data);
         } catch(e) {
             console.error("API Error", e);
-            document.getElementById('currentLocText').innerText = "連線異常，重試中...";
-            document.getElementById('footerLoc').innerText = "連線中...";
+            document.getElementById('footerLoc').innerText = "連線異常...";
+            document.getElementById('marqueeText').innerText = "無法連線至伺服器...";
         }
     }
 
@@ -301,26 +340,22 @@
         const delay = data.delay || 0;
         const status = data.status || "not_started";
         const loc = data.loc || "未知";
-        const statusCode = data.statusCode || 4; // TDX: 0=進站, 1=在站, 2=離站
+        const statusCode = data.statusCode || 4;
 
         const badge = document.getElementById('headerBadge');
-        const locText = document.getElementById('currentLocText');
         
-        // --- 底部位置與 Header 更新邏輯 ---
+        // --- 1. 狀態標籤與底部位置 ---
         let displayLoc = loc;
         const stops = trainDB[currentTrainNo].stops;
         
         if (status === "not_started") {
             badge.innerText = "尚未發車";
             badge.className = "badge rounded-pill bg-secondary ms-2";
-            locText.innerText = "等待發車中";
             displayLoc = "尚未發車";
         } else {
             badge.innerText = delay > 0 ? `晚 ${delay} 分` : `準點`;
             badge.className = `badge rounded-pill ms-2 ${delay > 0 ? 'bg-danger' : 'bg-success'}`;
             
-            // ★★★ 區間顯示核心邏輯 ★★★
-            // 如果狀態是 2 (離站中/行駛中)，且不是最後一站，顯示 "本站 ➝ 下一站"
             if (statusCode === 2) {
                 const currentIdx = stops.findIndex(s => s.name === loc);
                 if (currentIdx !== -1 && currentIdx < stops.length - 1) {
@@ -328,14 +363,56 @@
                     displayLoc = `${loc} ➝ ${nextStation}`;
                 }
             }
-            
-            locText.innerText = `位置：${displayLoc}`;
         }
-        
-        // 更新底部位置文字
         document.getElementById('footerLoc').innerText = displayLoc;
 
-        // --- 繪製時間軸 ---
+
+        // --- 2. ★★★ 跑馬燈內容產生 ★★★ ---
+        const marqueeEl = document.getElementById('marqueeText');
+        
+        if (status === "not_started") {
+             marqueeEl.innerText = `本列車尚未發車，表定 ${stops[0].time} 由 ${stops[0].name} 發車。`;
+             marqueeEl.classList.remove('marquee-alert');
+        } else {
+            const delayText = delay > 0 ? `⚠️ 晚 ${delay} 分` : `OK 準點`;
+            
+            // 找出下一站資訊
+            let nextStopInfo = "終點站";
+            const currentIdx = stops.findIndex(s => s.name === loc);
+            // 簡單邏輯：如果抓到的位置在清單內，且還有下一站
+            let nextIdx = -1;
+            
+            if (currentIdx !== -1 && currentIdx < stops.length - 1) {
+                 nextIdx = currentIdx + 1; // 假設是下一站
+            } else if (currentIdx === -1) {
+                // 如果 loc 不在停靠表(例如通過站)，找時間最近的下一站
+                const now = new Date();
+                // 這裡簡化處理，直接顯示終點
+                nextStopInfo = `終點：${stops[stops.length-1].name}`;
+            }
+
+            if (nextIdx !== -1) {
+                const s = stops[nextIdx];
+                const [h, m] = s.time.split(':').map(Number);
+                let d = new Date(); d.setHours(h, m + delay, 0);
+                // 跨日修正
+                if (new Date() - d > 43200000) d.setDate(d.getDate() + 1);
+                const eta = d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+                nextStopInfo = `下一站：${s.name} (預計 ${eta})`;
+            }
+
+            // 組合跑馬燈文字
+            const marqueeText = `${currentTrainNo} 次 ${trainDB[currentTrainNo].type} ⭕ 目前位置：${displayLoc} ⭕ ${delayText} ⭕ ${nextStopInfo}`;
+            
+            marqueeEl.innerText = marqueeText;
+            
+            // 嚴重誤點變紅字
+            if (delay >= 10) marqueeEl.classList.add('marquee-alert');
+            else marqueeEl.classList.remove('marquee-alert');
+        }
+
+
+        // --- 3. 繪製時間軸 ---
         let html = "";
         let passed = true; 
         let foundCurrent = false;
@@ -349,9 +426,7 @@
             let date = new Date();
             date.setHours(h, m + delay, 0);
 
-            if (now - date > 43200000) {
-                date.setDate(date.getDate() + 1);
-            }
+            if (now - date > 43200000) date.setDate(date.getDate() + 1);
 
             const etaStr = date.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
 
